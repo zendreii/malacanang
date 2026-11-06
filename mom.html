@@ -1,0 +1,1211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Night Shift at Malacañang - HTML5 2D Canvas Spirit</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap');
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #030303;
+            font-family: 'Share Tech Mono', monospace;
+            user-select: none;
+            color: #d1d5db;
+        }
+
+        .font-vt323 { font-family: 'VT323', monospace; }
+
+        .vignette {
+            box-shadow: inset 0 0 100px rgba(0,0,0,0.85), inset 0 0 180px rgba(0,0,0,0.95);
+        }
+
+        .btn-retro {
+            background: linear-gradient(180deg, #222222 0%, #111111 100%);
+            border: 1px solid #3f3f46;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.1), 0 3px 5px rgba(0,0,0,0.6);
+            transition: all 0.2s ease;
+        }
+
+        .btn-retro:hover {
+            border-color: #d97706;
+        }
+
+        .btn-retro:active, .btn-retro.active {
+            background: linear-gradient(180deg, #111111 0%, #222222 100%);
+            transform: translateY(1px);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+            border-color: #ef4444;
+        }
+
+        @keyframes strobe-flash {
+            0%, 100% { background-color: #000; }
+            50% { background-color: #800000; }
+        }
+
+        .strobe-bg {
+            animation: strobe-flash 0.08s infinite;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111; }
+        ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+    </style>
+</head>
+<body class="bg-black text-amber-500 h-screen w-screen overflow-hidden vignette select-none">
+
+    <!-- 3D WEBGL ENVIRONMENT CANVAS -->
+    <div id="canvas-container" class="absolute inset-0 z-0"></div>
+
+    <!-- 2D OVERLAY CANVAS FOR SPIRIT & EFFECTS (Prevents WebGL Memory Freezes) -->
+    <canvas id="spirit-2d-canvas" class="absolute inset-0 z-5 pointer-events-none w-full h-full"></canvas>
+
+    <!-- MAIN UI OVERLAY -->
+    <div id="game-ui" class="absolute inset-0 z-10 flex flex-col justify-between pointer-events-none p-4 md:p-6 hidden">
+        
+        <!-- HEADER HUD -->
+        <div class="flex justify-between items-start bg-zinc-950/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md pointer-events-auto shadow-2xl">
+            <div class="space-y-1">
+                <div class="text-[10px] md:text-xs text-amber-500 uppercase tracking-widest font-bold">Location & Time</div>
+                <div class="text-xl md:text-3xl font-vt323 text-amber-400 flex items-center gap-3">
+                    <span id="ui-location">MALACAÑANG PALACE - KALAYAAN HALL</span>
+                    <span class="text-amber-600">|</span>
+                    <span id="ui-clock" class="text-amber-200 font-bold">11:00 PM</span>
+                </div>
+            </div>
+
+            <!-- STATUS BARS -->
+            <div class="flex gap-4 md:gap-6 items-center">
+                <div class="w-28 md:w-48">
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-amber-500 font-bold uppercase">Power Supply</span>
+                        <span id="ui-power-val" class="text-amber-300">100%</span>
+                    </div>
+                    <div class="w-full bg-zinc-900 border border-zinc-700 h-3.5 rounded overflow-hidden p-0.5">
+                        <div id="ui-power-bar" class="bg-amber-500 h-full w-full transition-all duration-500 rounded-sm"></div>
+                    </div>
+                </div>
+
+                <div class="w-28 md:w-48">
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-amber-500 font-bold uppercase">Sanity Level</span>
+                        <span id="ui-sanity-val" class="text-cyan-400">100%</span>
+                    </div>
+                    <div class="w-full bg-zinc-900 border border-zinc-700 h-3.5 rounded overflow-hidden p-0.5">
+                        <div id="ui-sanity-bar" class="bg-cyan-500 h-full w-full transition-all duration-500 rounded-sm"></div>
+                    </div>
+                </div>
+
+                <div class="w-28 md:w-48">
+                    <div class="flex justify-between text-xs mb-1">
+                        <span class="text-amber-500 font-bold uppercase">Health Level</span>
+                        <span id="ui-health-val" class="text-red-400">100%</span>
+                    </div>
+                    <div class="w-full bg-zinc-900 border border-zinc-700 h-3.5 rounded overflow-hidden p-0.5">
+                        <div id="ui-health-bar" class="bg-red-500 h-full w-full transition-all duration-500 rounded-sm"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CENTER WARNING DISPLAY -->
+        <div class="text-center">
+            <div id="ui-warning" class="inline-block text-red-500 font-vt323 text-2xl md:text-3xl bg-black/90 px-5 py-2 rounded border border-red-900/80 opacity-0 transition-opacity duration-300 uppercase tracking-wider shadow-2xl">
+                SUBTLE DISTURBANCE DETECTED
+            </div>
+        </div>
+
+        <!-- CAMERA ACTIVE STATUS HUD -->
+        <div id="cctv-status-bar" class="self-center bg-black/80 px-6 py-2 rounded border border-slate-700 text-slate-200 font-mono text-xs hidden pointer-events-auto flex items-center gap-4 shadow-2xl">
+            <div class="flex items-center gap-2">
+                <span class="w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse"></span>
+                <span id="cam-hud-title" class="text-amber-400 font-bold font-vt323 text-xl">CAM 1: MAIN HALLWAY</span>
+            </div>
+            <div class="text-slate-400">STATUS: <span id="cam-hud-status" class="text-emerald-400 font-bold">NORMAL</span></div>
+            <div class="text-slate-400">FEED: <span class="text-amber-400">[A]</span> PREV | <span class="text-amber-400">[D]</span> NEXT | <span class="text-red-400">[F]</span> EXORCISE</div>
+        </div>
+
+        <!-- BOTTOM CONTROL DASHBOARD -->
+        <div class="bg-zinc-950/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md pointer-events-auto flex justify-between items-center gap-4 shadow-xl">
+            <div class="flex items-center gap-2 md:gap-4 flex-wrap">
+                <button id="btn-light" onclick="toggleLight(this)" class="btn-retro text-xs md:text-sm px-3 md:px-4 py-2 text-amber-300 rounded flex items-center gap-1.5">
+                    <span>💡 HALLWAY LIGHT [A]</span>
+                </button>
+                <button id="btn-door" onclick="toggleDoor(this)" class="btn-retro text-xs md:text-sm px-3 md:px-4 py-2 text-amber-300 rounded flex items-center gap-1.5">
+                    <span>🚪 DOOR TOGGLE [D]</span>
+                </button>
+                <button id="btn-cam-toggle" onclick="toggleCameraMonitor(this)" class="btn-retro text-xs md:text-sm px-3 md:px-4 py-2 text-slate-300 rounded flex items-center gap-1.5">
+                    <span>📺 ZOOM CCTV SCREEN [C]</span>
+                </button>
+                <button id="btn-pray" onclick="pray(this)" class="btn-retro text-xs md:text-sm px-3 md:px-4 py-2 text-cyan-300 rounded flex items-center gap-1.5">
+                    <span>🙏 PRAY [V]</span>
+                </button>
+                <button id="btn-exorcise" onclick="triggerExorcism(this)" class="bg-red-950/90 hover:bg-red-800 text-red-100 border border-red-600 text-xs md:text-sm px-3 md:px-4 py-2 rounded font-bold transition flex items-center gap-1.5">
+                    <span>⚡ EXORCISE ANOMALY [F]</span>
+                </button>
+            </div>
+
+            <div class="text-right border-l border-zinc-800 pl-4 hidden md:block">
+                <div class="text-[10px] text-amber-500 font-bold uppercase">Office Breach Emergency</div>
+                <div class="text-xs text-amber-300">HOLD <span class="bg-amber-900/80 px-1.5 py-0.5 rounded border border-amber-600 font-bold">SPACE</span> TO RAISE HOLY CRUCIFIX</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CRUCIFIX OVERLAY -->
+    <div id="crucifix-overlay" class="absolute inset-0 pointer-events-none z-15 flex items-center justify-center opacity-0 transition-opacity duration-300">
+        <div class="relative flex flex-col items-center">
+            <div class="absolute w-72 h-72 bg-amber-400/20 blur-3xl rounded-full"></div>
+            <svg class="w-64 h-64 text-amber-200 drop-shadow-[0_0_30px_rgba(251,191,36,0.8)]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M11 2h2v6h5v2h-5v12h-2V10H6V8h5V2z"/>
+            </svg>
+            <div class="text-amber-200 font-vt323 text-2xl tracking-widest mt-4 bg-black/90 px-4 py-1 rounded border border-amber-600/50">
+                HOLY SACRAMENT HELD
+            </div>
+        </div>
+    </div>
+
+    <!-- TITLE SCREEN -->
+    <div id="screen-title" class="absolute inset-0 z-30 bg-zinc-950 flex flex-col items-center justify-center p-6 text-center">
+        <div class="max-w-2xl w-full border border-amber-900/60 bg-black/95 p-8 rounded-lg shadow-2xl relative overflow-hidden">
+            <div class="absolute -top-12 -right-12 w-48 h-48 bg-red-950/30 blur-3xl rounded-full"></div>
+            
+            <div class="text-amber-500 text-xs font-mono tracking-widest uppercase mb-2">Aethra</div>
+            <h1 class="text-4xl md:text-6xl font-vt323 text-amber-500 mb-3 tracking-wider uppercase drop-shadow-md">
+                Night Shift at Malacañang
+            </h1>
+            <p class="text-zinc-400 text-xs md:text-sm mb-6 leading-relaxed">
+                2D HTML5 Canvas Spirit Renderer Integration. Observe live CCTV camera feeds, manage power, and banish lingering spirits without WebGL context lockups.
+            </p>
+
+            <div class="grid grid-cols-2 gap-3 text-left bg-zinc-900/80 p-4 rounded border border-zinc-800 text-xs mb-6">
+                <div><span class="text-amber-400 font-bold">[A]</span> Light (Desk) / Prev Cam </div>
+                <div><span class="text-amber-400 font-bold">[D]</span> Door (Desk) / Next Cam </div>
+                <div><span class="text-amber-400 font-bold">[C]</span> Zoom CCTV Screen</div>
+                <div><span class="text-amber-400 font-bold">[F]</span> Exorcise Anomaly</div>
+                <div><span class="text-amber-400 font-bold">[V]</span> Hold to Pray (Drains Health, Restores Sanity)</div>
+                <div><span class="text-amber-400 font-bold">[SPACE]</span> Hold Holy Crucifix</div>
+            </div>
+
+            <button id="btn-start" onclick="startGame(this)" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-bold text-base rounded transition duration-200 uppercase tracking-widest shadow-lg">
+                BEGIN NIGHT SHIFT
+            </button>
+        </div>
+    </div>
+
+    <!-- END GAME SCREEN -->
+    <div id="screen-end" class="absolute inset-0 z-30 bg-zinc-950 flex flex-col items-center justify-center p-6 text-center hidden">
+        <div class="max-w-md w-full border p-8 rounded-lg shadow-2xl relative bg-black/95 border-amber-900/60">
+            <h2 id="end-title" class="text-4xl md:text-5xl font-vt323 mb-2 tracking-wider">GAME OVER</h2>
+            <p id="end-subtitle" class="text-zinc-400 text-xs mb-6">You were consumed by the darkness of the hall.</p>
+            
+            <div class="bg-zinc-900/90 p-4 rounded border border-zinc-800 text-xs text-left mb-6 space-y-2">
+                <div class="flex justify-between"><span class="text-zinc-500">Time Survived:</span> <span id="end-time" class="text-amber-400 font-bold">12:00 AM</span></div>
+                <div class="flex justify-between"><span class="text-zinc-500">Anomalies Cleared:</span> <span id="end-anomalies" class="text-emerald-400 font-bold">0</span></div>
+                <div class="flex justify-between"><span class="text-zinc-500">Final Sanity:</span> <span id="end-sanity" class="text-cyan-400 font-bold">0%</span></div>
+                <div class="flex justify-between"><span class="text-zinc-500">Final Health:</span> <span id="end-health" class="text-red-400 font-bold">0%</span></div>
+            </div>
+
+            <button onclick="restartGame(this)" class="w-full py-3 bg-amber-600 hover:bg-amber-500 text-black font-bold text-sm rounded transition uppercase tracking-widest">
+                RETRY SHIFT
+            </button>
+        </div>
+    </div>
+
+    <!-- JUMPSCARE CONTAINER -->
+    <div id="jumpscare-overlay" class="absolute inset-0 z-40 bg-black hidden flex items-center justify-center overflow-hidden pointer-events-none">
+        <div id="jumpscare-flash" class="absolute inset-0 strobe-bg opacity-75"></div>
+    </div>
+
+    <!-- AUDIO SYSTEM -->
+    <script>
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+
+            if (type === 'click') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(150, now + 0.08);
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            }
+            else if (type === 'door') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(100, now);
+                osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+                gain.gain.setValueAtTime(0.4, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.5);
+            }
+            else if (type === 'pray') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(320, now);
+                osc.frequency.exponentialRampToValueAtTime(440, now + 1.2);
+                gain.gain.setValueAtTime(0.01, now);
+                gain.gain.linearRampToValueAtTime(0.2, now + 0.6);
+                gain.gain.linearRampToValueAtTime(0.01, now + 1.2);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 1.2);
+            }
+            else if (type === 'exorcism') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.6);
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.6);
+            }
+            else if (type === 'creak') {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(60, now);
+                osc.frequency.linearRampToValueAtTime(85, now + 0.3);
+                osc.frequency.linearRampToValueAtTime(50, now + 0.7);
+                gain.gain.setValueAtTime(0.05, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.7);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.7);
+            }
+            else if (type === 'jumpscare') {
+                const osc1 = audioCtx.createOscillator();
+                const osc2 = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc1.type = 'sawtooth';
+                osc2.type = 'square';
+
+                osc1.frequency.setValueAtTime(120, now);
+                osc1.frequency.linearRampToValueAtTime(1200, now + 0.1);
+                osc1.frequency.linearRampToValueAtTime(200, now + 1.5);
+
+                osc2.frequency.setValueAtTime(150, now);
+                osc2.frequency.linearRampToValueAtTime(1400, now + 0.1);
+                osc2.frequency.linearRampToValueAtTime(100, now + 1.5);
+
+                gain.gain.setValueAtTime(0.9, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 1.5);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 1.5);
+                osc2.stop(now + 1.5);
+            }
+        }
+
+        let ambientOsc = null;
+        let ambientGain = null;
+        let ambientInterval = null;
+
+        function startAmbientSound() {
+            if (!audioCtx || ambientOsc) return;
+            
+            ambientOsc = audioCtx.createOscillator();
+            ambientGain = audioCtx.createGain();
+            ambientOsc.type = 'sine';
+            ambientOsc.frequency.setValueAtTime(45, audioCtx.currentTime);
+            ambientGain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+            ambientOsc.connect(ambientGain);
+            ambientGain.connect(audioCtx.destination);
+            ambientOsc.start();
+
+            ambientInterval = setInterval(() => {
+                if (!isGameActive) return;
+                if (Math.random() < 0.25) {
+                    playSound('creak');
+                }
+            }, 8000);
+        }
+
+        function stopAmbientSound() {
+            if (ambientOsc) {
+                ambientOsc.stop();
+                ambientOsc.disconnect();
+                ambientOsc = null;
+            }
+            if (ambientInterval) {
+                clearInterval(ambientInterval);
+                ambientInterval = null;
+            }
+        }
+    </script>
+
+    <!-- WEBGL ENGINE + 2D HTML5 CANVAS SPIRIT RENDERER -->
+    <script>
+        let scene, camera, renderer;
+        let deskLamp, hallwayLight, ambientLight, officeDoorMesh;
+        let spiritImageElement;
+        
+        // 2D CANVAS SYSTEM
+        let spiritCanvas, spiritCtx;
+
+        // CCTV SYSTEM
+        let screenTexture, screenCanvas, screenCtx, monitorMesh, monitorGroup;
+
+        let isGameActive = false;
+        let isJumpscareActive = false;
+
+        let shiftTimer = 300; 
+        let timerInterval = null;
+        let power = 100.0;
+        let sanity = 100.0;
+        let health = 100.0;
+
+        let isLightOn = false;
+        let isDoorClosed = false;
+        let isCamOpen = false;
+        let isCrucifixUp = false;
+        let activeCamIndex = 1;
+        let isPraying = false;
+
+        let spiritLocation = 3; 
+        let spiritBreachTimer = 0;
+        let activeAnomalyCam = 0;
+        let anomaliesClearedCount = 0;
+
+        let targetRotationY = 0, targetRotationX = 0;
+        const keys = {};
+
+        // CCTV Camera Telemetry
+        let cctvFrameCounter = 0;
+        let staticTransitionFrames = 0;
+
+        function init3D() {
+            const container = document.getElementById('canvas-container');
+            
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x0a0a0d, 0.035);
+
+            camera = new THREE.PerspectiveCamera(65, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 1.5, 0);
+
+            try {
+                renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+            } catch(e) {
+                renderer = new THREE.WebGLRenderer({ antialias: false });
+            }
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            container.appendChild(renderer.domElement);
+
+            spiritCanvas = document.getElementById('spirit-2d-canvas');
+            spiritCtx = spiritCanvas.getContext('2d');
+            resize2DCanvas();
+
+            screenCanvas = document.createElement('canvas');
+            screenCanvas.width = 512;
+            screenCanvas.height = 384;
+            screenCtx = screenCanvas.getContext('2d');
+
+            screenTexture = new THREE.CanvasTexture(screenCanvas);
+            screenTexture.minFilter = THREE.LinearFilter;
+            screenTexture.magFilter = THREE.LinearFilter;
+
+            buildOfficeEnvironment();
+            load2DSpiritAsset();
+
+            window.addEventListener('resize', onWindowResize);
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isGameActive || isCamOpen || isJumpscareActive) return;
+                const movementX = e.movementX || 0;
+                const movementY = e.movementY || 0;
+
+                targetRotationY -= movementX * 0.0018;
+                targetRotationX -= movementY * 0.0018;
+
+                targetRotationX = Math.max(-0.45, Math.min(0.45, targetRotationX));
+                targetRotationY = Math.max(-1.1, Math.min(1.1, targetRotationY));
+            });
+        }
+
+        function resize2DCanvas() {
+            if (!spiritCanvas) return;
+            spiritCanvas.width = window.innerWidth;
+            spiritCanvas.height = window.innerHeight;
+        }
+
+        function load2DSpiritAsset() {
+            spiritImageElement = new Image();
+            spiritImageElement.onerror = function() {
+                const fallbackCanvas = document.createElement('canvas');
+                fallbackCanvas.width = 150;
+                fallbackCanvas.height = 200;
+                const fCtx = fallbackCanvas.getContext('2d');
+                fCtx.fillStyle = "rgba(180, 220, 200, 0.85)";
+                fCtx.beginPath();
+                fCtx.arc(75, 60, 45, Math.PI, 0, false);
+                fCtx.lineTo(105, 170);
+                fCtx.lineTo(90, 150);
+                fCtx.lineTo(75, 170);
+                fCtx.lineTo(60, 150);
+                fCtx.lineTo(45, 170);
+                fCtx.closePath();
+                fCtx.fill();
+                fCtx.fillStyle = "#ff0000";
+                fCtx.fillRect(55, 50, 12, 8);
+                fCtx.fillRect(83, 50, 12, 8);
+                spiritImageElement.src = fallbackCanvas.toDataURL();
+            };
+            spiritImageElement.src = '800468491_985097851264399_4788372556129568886_n.jpg';
+        }
+
+        function buildOfficeEnvironment() {
+            const wallMaterial = new THREE.MeshStandardMaterial({ color: 0x4a2c1b, roughness: 0.7 });
+            const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x222225, roughness: 0.5 });
+            const ceilingMaterial = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.8 });
+
+            const floor = new THREE.Mesh(new THREE.PlaneGeometry(10, 24), floorMaterial);
+            floor.rotation.x = -Math.PI / 2;
+            floor.position.z = -6;
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(10, 24), ceilingMaterial);
+            ceiling.rotation.x = Math.PI / 2;
+            ceiling.position.set(0, 3, -6);
+            scene.add(ceiling);
+
+            const leftWall = new THREE.Mesh(new THREE.PlaneGeometry(24, 3), wallMaterial);
+            leftWall.position.set(-5, 1.5, -6);
+            leftWall.rotation.y = Math.PI / 2;
+            scene.add(leftWall);
+
+            const rightWall = new THREE.Mesh(new THREE.PlaneGeometry(24, 3), wallMaterial);
+            rightWall.position.set(5, 1.5, -6);
+            rightWall.rotation.y = -Math.PI / 2;
+            scene.add(rightWall);
+
+            const frontWallLeft = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 3), wallMaterial);
+            frontWallLeft.position.set(-3.25, 1.5, -4);
+            scene.add(frontWallLeft);
+
+            const frontWallRight = new THREE.Mesh(new THREE.PlaneGeometry(3.5, 3), wallMaterial);
+            frontWallRight.position.set(3.25, 1.5, -4);
+            scene.add(frontWallRight);
+
+            const frontWallTop = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.8), wallMaterial);
+            frontWallTop.position.set(0, 2.6, -4);
+            scene.add(frontWallTop);
+
+            const doorGeo = new THREE.BoxGeometry(3, 2.2, 0.1);
+            const doorMat = new THREE.MeshStandardMaterial({ color: 0x333338, metalness: 0.7, roughness: 0.4 });
+            officeDoorMesh = new THREE.Mesh(doorGeo, doorMat);
+            officeDoorMesh.position.set(0, 3.2, -3.95);
+            scene.add(officeDoorMesh);
+
+            const deskGeo = new THREE.BoxGeometry(4, 0.8, 1.6);
+            const deskMat = new THREE.MeshStandardMaterial({ color: 0x3b1e0d, roughness: 0.6 });
+            const desk = new THREE.Mesh(deskGeo, deskMat);
+            desk.position.set(0, 0.4, -1.2);
+            desk.castShadow = true;
+            desk.receiveShadow = true;
+            scene.add(desk);
+
+            monitorGroup = new THREE.Group();
+            monitorGroup.position.set(-0.6, 1.05, -1.05);
+            monitorGroup.rotation.y = Math.PI / 6;
+
+            const monitorFrameGeo = new THREE.BoxGeometry(0.8, 0.6, 0.35);
+            const monitorFrameMat = new THREE.MeshStandardMaterial({ color: 0x1f1f23 });
+            const monitorFrame = new THREE.Mesh(monitorFrameGeo, monitorFrameMat);
+            monitorFrame.position.set(0, 0, 0);
+            monitorGroup.add(monitorFrame);
+
+            const baseGeo = new THREE.BoxGeometry(0.4, 0.04, 0.3);
+            const baseMesh = new THREE.Mesh(baseGeo, monitorFrameMat);
+            baseMesh.position.set(0, -0.32, 0);
+            monitorGroup.add(baseMesh);
+
+            const neckGeo = new THREE.CylinderGeometry(0.03, 0.03, 0.15);
+            const neckMesh = new THREE.Mesh(neckGeo, monitorFrameMat);
+            neckMesh.position.set(0, -0.23, 0);
+            monitorGroup.add(neckMesh);
+
+            const screenGeo = new THREE.PlaneGeometry(0.72, 0.52);
+            const screenMat = new THREE.MeshBasicMaterial({ map: screenTexture });
+            monitorMesh = new THREE.Mesh(screenGeo, screenMat);
+            monitorMesh.position.set(0, 0, 0.178);
+            monitorGroup.add(monitorMesh);
+
+            scene.add(monitorGroup);
+
+            ambientLight = new THREE.AmbientLight(0xfff5ea, 0.38);
+            scene.add(ambientLight);
+
+            deskLamp = new THREE.PointLight(0xffb74d, 2.2, 8);
+            deskLamp.position.set(0.9, 1.4, -1.1);
+            deskLamp.castShadow = true;
+            scene.add(deskLamp);
+
+            hallwayLight = new THREE.SpotLight(0xfff1e0, 0, 22, Math.PI / 4, 0.3);
+            hallwayLight.position.set(0, 2.4, -3.8);
+            hallwayLight.target.position.set(0, 0, -12);
+            scene.add(hallwayLight);
+            scene.add(hallwayLight.target);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            resize2DCanvas();
+        }
+
+        function draw2DSpiritOverlay() {
+            if (!spiritCtx || !spiritImageElement || !spiritImageElement.complete) return;
+
+            const w = spiritCanvas.width;
+            const h = spiritCanvas.height;
+
+            spiritCtx.clearRect(0, 0, w, h);
+
+            if (isCamOpen) return;
+
+            const offsetX = (camera.rotation.y / 1.1) * (w * 0.25);
+            const offsetY = (camera.rotation.x / 0.45) * (h * 0.15);
+
+            spiritCtx.imageSmoothingEnabled = false;
+
+            if (spiritLocation === 1 && isLightOn) {
+                const spriteW = w * 0.12;
+                const spriteH = h * 0.32;
+                const x = (w / 2) - (spriteW / 2) + offsetX;
+                const y = (h / 2) - (spriteH / 2) + offsetY - (h * 0.05);
+
+                spiritCtx.globalAlpha = 0.85;
+                spiritCtx.drawImage(spiritImageElement, x, y, spriteW, spriteH);
+                spiritCtx.globalAlpha = 1.0;
+            } 
+            else if (spiritLocation === 0 && isLightOn) {
+                const spriteW = w * 0.24;
+                const spriteH = h * 0.60;
+                const x = (w / 2) - (spriteW / 2) + offsetX;
+                const y = (h / 2) - (spriteH / 2) + offsetY;
+
+                spiritCtx.globalAlpha = 0.95;
+                spiritCtx.drawImage(spiritImageElement, x, y, spriteW, spriteH);
+                spiritCtx.globalAlpha = 1.0;
+            } 
+            else if (spiritLocation === -1) {
+                const spriteW = w * 0.42;
+                const spriteH = h * 0.95;
+                const x = (w / 2) - (spriteW / 2) + (offsetX * 0.5);
+                const y = (h / 2) - (spriteH / 2) + (offsetY * 0.5) + (h * 0.05);
+
+                const pulse = Math.sin(Date.now() * 0.01) * 0.1;
+                spiritCtx.globalAlpha = 0.9 + pulse;
+                spiritCtx.drawImage(spiritImageElement, x, y, spriteW, spriteH);
+                spiritCtx.globalAlpha = 1.0;
+            }
+        }
+
+        function setupEventListeners() {
+            document.addEventListener('keydown', (e) => {
+                if (!isGameActive || isJumpscareActive) return;
+                const code = e.code;
+
+                if (code === 'Space') {
+                    e.preventDefault();
+                    isCrucifixUp = true;
+                    document.getElementById('crucifix-overlay').classList.remove('opacity-0');
+                    document.getElementById('crucifix-overlay').classList.add('opacity-100');
+                }
+                else if (code === 'KeyA' && !keys['KeyA']) {
+                    if (isCamOpen) {
+                        switchCamera(activeCamIndex === 1 ? 3 : activeCamIndex - 1);
+                    } else {
+                        toggleLight();
+                    }
+                }
+                else if (code === 'KeyD' && !keys['KeyD']) {
+                    if (isCamOpen) {
+                        switchCamera(activeCamIndex === 3 ? 1 : activeCamIndex + 1);
+                    } else {
+                        toggleDoor();
+                    }
+                }
+                else if (code === 'KeyC' && !keys['KeyC']) toggleCameraMonitor();
+                else if (code === 'KeyV' && !keys['KeyV']) {
+                    if (health > 10) {
+                        isPraying = true;
+                        playSound('pray');
+                        document.getElementById('btn-pray').classList.add('active');
+                    } else {
+                        showWarning("HEALTH TOO LOW TO PRAY SAFELY!");
+                    }
+                }
+                else if (code === 'KeyF' && !keys['KeyF']) triggerExorcism();
+
+                keys[code] = true;
+            });
+
+            document.addEventListener('keyup', (e) => {
+                const code = e.code;
+                if (code === 'Space') {
+                    e.preventDefault();
+                    isCrucifixUp = false;
+                    document.getElementById('crucifix-overlay').classList.remove('opacity-100');
+                    document.getElementById('crucifix-overlay').classList.add('opacity-0');
+                }
+                if (code === 'KeyV') {
+                    isPraying = false;
+                    document.getElementById('btn-pray').classList.remove('active');
+                }
+                keys[code] = false;
+            });
+        }
+
+        function toggleLight(btn) {
+            if (btn) btn.blur();
+            if (power <= 0) return;
+            isLightOn = !isLightOn;
+            hallwayLight.intensity = isLightOn ? 6.5 : 0;
+            document.getElementById('btn-light').classList.toggle('active', isLightOn);
+            playSound('click');
+        }
+
+        function toggleDoor(btn) {
+            if (btn) btn.blur();
+            if (power <= 0 && !isDoorClosed) return;
+            isDoorClosed = !isDoorClosed;
+            document.getElementById('btn-door').classList.toggle('active', isDoorClosed);
+            playSound('door');
+        }
+
+        function toggleCameraMonitor(btn) {
+            if (btn) btn.blur();
+            isCamOpen = !isCamOpen;
+            document.getElementById('btn-cam-toggle').classList.toggle('active', isCamOpen);
+            document.getElementById('cctv-status-bar').classList.toggle('hidden', !isCamOpen);
+            playSound('click');
+            staticTransitionFrames = 8;
+        }
+
+        function switchCamera(camIdx) {
+            activeCamIndex = camIdx;
+            staticTransitionFrames = 10; 
+            playSound('click');
+            renderWebGLCCTVTexture();
+        }
+
+        function pray(btn) {
+            if (btn) btn.blur();
+            if (health <= 10) {
+                showWarning("HEALTH TOO LOW TO PRAY SAFELY!");
+                return;
+            }
+            isPraying = !isPraying;
+            if (isPraying) playSound('pray');
+            document.getElementById('btn-pray').classList.toggle('active', isPraying);
+        }
+
+        function triggerExorcism(btn) {
+            if (btn) btn.blur();
+            if (activeAnomalyCam === activeCamIndex) {
+                activeAnomalyCam = 0;
+                anomaliesClearedCount++;
+                staticTransitionFrames = 12;
+
+                // REWARD: Restore +25% Health on successful exorcism
+                health = Math.min(100, health + 25);
+                
+                // Update Health HUD immediately
+                const healthVal = document.getElementById('ui-health-val');
+                const healthBar = document.getElementById('ui-health-bar');
+                if (healthVal) healthVal.textContent = `${Math.round(health)}%`;
+                if (healthBar) healthBar.style.width = `${health}%`;
+
+                playSound('exorcism');
+                renderWebGLCCTVTexture();
+                showWarning("ANOMALY PURIFIED! HEALTH RESTORED +25%");
+            }
+        }
+
+        function showWarning(msg) {
+            const warnElem = document.getElementById('ui-warning');
+            warnElem.textContent = msg;
+            warnElem.classList.remove('opacity-0');
+            setTimeout(() => {
+                warnElem.classList.add('opacity-0');
+            }, 2500);
+        }
+
+        function renderWebGLCCTVTexture() {
+            if (!screenCtx) return;
+
+            cctvFrameCounter++;
+            const w = screenCanvas.width;
+            const h = screenCanvas.height;
+
+            screenCtx.fillStyle = "#011208";
+            screenCtx.fillRect(0, 0, w, h);
+
+            const names = {
+                1: "CAM 01 - MAIN CORRIDOR",
+                2: "CAM 02 - PALACE BEDROOM",
+                3: "CAM 03 - MUSEUM EXHIBIT"
+            };
+
+            const titleElem = document.getElementById('cam-hud-title');
+            if (titleElem) titleElem.textContent = names[activeCamIndex];
+
+            screenCtx.save();
+            screenCtx.translate(w / 2, h / 2);
+            screenCtx.scale(0.88, 0.72);
+            screenCtx.rotate(-0.02 + Math.sin(cctvFrameCounter * 0.02) * 0.005); 
+            screenCtx.translate(-w / 2, -h / 2);
+
+            if (activeCamIndex === 1) {
+                screenCtx.fillStyle = "#062e1a";
+                screenCtx.fillRect(80, 20, 352, 344);
+                screenCtx.fillStyle = "#1e3a29";
+                screenCtx.fillRect(216, 20, 80, 344);
+
+                screenCtx.fillStyle = "#0c4a2a";
+                for(let y = 40; y < 340; y += 60) {
+                    screenCtx.fillRect(70, y, 20, 30);
+                    screenCtx.fillRect(422, y, 20, 30);
+                }
+            } else if (activeCamIndex === 2) {
+                screenCtx.fillStyle = "#042414";
+                screenCtx.fillRect(60, 40, 392, 304);
+                screenCtx.fillStyle = "#144e2e";
+                screenCtx.fillRect(180, 80, 152, 190);
+                
+                screenCtx.fillStyle = "#34d399";
+                screenCtx.fillRect(195, 90, 50, 30);
+                screenCtx.fillRect(267, 90, 50, 30);
+
+                screenCtx.fillStyle = "#065f46";
+                screenCtx.fillRect(125, 90, 40, 40);
+                screenCtx.fillRect(347, 90, 40, 40);
+            } else if (activeCamIndex === 3) {
+                screenCtx.fillStyle = "#031d10";
+                screenCtx.fillRect(50, 30, 412, 324);
+
+                screenCtx.fillStyle = "#0d5c36";
+                screenCtx.fillRect(110, 80, 80, 80);
+                screenCtx.fillRect(320, 80, 80, 80);
+                screenCtx.fillRect(216, 210, 80, 80);
+
+                screenCtx.fillStyle = "#a7f3d0";
+                screenCtx.beginPath(); screenCtx.arc(150, 120, 16, 0, Math.PI*2); screenCtx.fill();
+                screenCtx.beginPath(); screenCtx.arc(360, 120, 16, 0, Math.PI*2); screenCtx.fill();
+                screenCtx.beginPath(); screenCtx.arc(256, 250, 16, 0, Math.PI*2); screenCtx.fill();
+            }
+
+            if (spiritLocation === activeCamIndex) {
+                screenCtx.imageSmoothingEnabled = false;
+                if (spiritImageElement && spiritImageElement.complete) {
+                    screenCtx.drawImage(spiritImageElement, 200, 105, 112, 176);
+                }
+            }
+
+            screenCtx.restore();
+
+            const imgData = screenCtx.getImageData(0, 0, w, h);
+            const data = imgData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (Math.random() < 0.18) {
+                    const noise = (Math.random() - 0.5) * 45;
+                    data[i] = Math.min(255, Math.max(0, data[i] + noise));
+                    data[i+1] = Math.min(255, Math.max(0, data[i+1] + noise + 10));
+                    data[i+2] = Math.min(255, Math.max(0, data[i+2] + noise));
+                }
+            }
+            screenCtx.putImageData(imgData, 0, 0);
+
+            if (activeAnomalyCam === activeCamIndex) {
+                screenCtx.fillStyle = "rgba(220, 38, 38, 0.28)";
+                screenCtx.fillRect(0, 0, w, h);
+
+                screenCtx.fillStyle = "#f87171";
+                screenCtx.font = "24px 'VT323', monospace";
+                screenCtx.fillText("⚠️ ANOMALY CORRUPTION DETECTED", 85, 45);
+            }
+
+            if (staticTransitionFrames > 0) {
+                staticTransitionFrames--;
+                screenCtx.fillStyle = "rgba(10, 20, 15, 0.85)";
+                screenCtx.fillRect(0, 0, w, h);
+
+                screenCtx.fillStyle = "#ffffff";
+                for (let i = 0; i < 600; i++) {
+                    screenCtx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
+                }
+            }
+
+            const grad = screenCtx.createRadialGradient(w/2, h/2, 160, w/2, h/2, 280);
+            grad.addColorStop(0, "rgba(0,0,0,0)");
+            grad.addColorStop(1, "rgba(0,10,0,0.85)");
+            screenCtx.fillStyle = grad;
+            screenCtx.fillRect(0, 0, w, h);
+
+            screenCtx.fillStyle = "rgba(0, 0, 0, 0.35)";
+            for (let i = 0; i < h; i += 3) {
+                screenCtx.fillRect(0, i, w, 1);
+            }
+
+            screenCtx.fillStyle = "#34d399";
+            screenCtx.font = "18px 'VT323', monospace";
+
+            if (Math.floor(cctvFrameCounter / 25) % 2 === 0) {
+                screenCtx.fillStyle = "#ef4444";
+                screenCtx.beginPath();
+                screenCtx.arc(28, 28, 6, 0, Math.PI * 2);
+                screenCtx.fill();
+            }
+            screenCtx.fillStyle = "#34d399";
+            screenCtx.fillText("REC", 42, 33);
+
+            const dateStr = `2026-09-25`;
+            const nowTime = new Date();
+            const timeStr = `${String(nowTime.getHours()).padStart(2, '0')}:${String(nowTime.getMinutes()).padStart(2, '0')}:${String(nowTime.getSeconds()).padStart(2, '0')}:${String(Math.floor(cctvFrameCounter % 30)).padStart(2, '0')}`;
+            screenCtx.fillText(`${dateStr} ${timeStr}`, w - 210, 33);
+
+            screenCtx.fillText(names[activeCamIndex], 20, h - 20);
+            screenCtx.fillText(`FRAME: ${cctvFrameCounter}`, w - 120, h - 20);
+
+            const statusElem = document.getElementById('cam-hud-status');
+            if (statusElem) {
+                if (activeAnomalyCam === activeCamIndex) {
+                    statusElem.textContent = "ANOMALY GLITCH DETECTED";
+                    statusElem.className = "text-red-500 font-bold animate-pulse";
+                } else if (spiritLocation === activeCamIndex) {
+                    statusElem.textContent = "APPARITION PRESENT";
+                    statusElem.className = "text-red-400 font-bold";
+                } else {
+                    statusElem.textContent = "CLEAR";
+                    statusElem.className = "text-emerald-400 font-bold";
+                }
+            }
+
+            screenTexture.needsUpdate = true;
+        }
+
+        function startGame(btn) {
+            if (btn) btn.blur();
+            initAudio();
+            startAmbientSound();
+
+            shiftTimer = 300;
+            power = 100.0;
+            sanity = 100.0;
+            health = 100.0;
+            isLightOn = false;
+            isDoorClosed = false;
+            isCamOpen = false;
+            isCrucifixUp = false;
+            isPraying = false;
+            isJumpscareActive = false;
+            spiritLocation = 3;
+            spiritBreachTimer = 0;
+            activeAnomalyCam = 0;
+            anomaliesClearedCount = 0;
+            document.getElementById('btn-pray').classList.remove('active');
+
+            document.getElementById('screen-title').classList.add('hidden');
+            document.getElementById('screen-end').classList.add('hidden');
+            document.getElementById('game-ui').classList.remove('hidden');
+
+            isGameActive = true;
+
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = setInterval(updateShiftTimer, 1000);
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function updateShiftTimer() {
+            if (!isGameActive) return;
+
+            shiftTimer--;
+
+            const hoursPassed = Math.floor((300 - shiftTimer) / 50);
+            const currentHour = (11 + hoursPassed) % 12 || 12;
+            const clockText = `${currentHour}:00 ${hoursPassed >= 1 ? 'AM' : 'PM'}`;
+            document.getElementById('ui-clock').textContent = clockText;
+
+            if (shiftTimer <= 0) {
+                triggerVictory();
+            }
+
+            handleSpiritAI();
+            handleAnomalyAI();
+        }
+
+        function handleSpiritAI() {
+            if (Math.random() < 0.12) {
+                if (spiritLocation > 0) {
+                    spiritLocation--;
+                    if (spiritLocation === 0) {
+                        showWarning("DISTANT FOOTSTEPS AT YOUR DOORWAY...");
+                    }
+                } else if (spiritLocation === 0) {
+                    if (isDoorClosed) {
+                        spiritLocation = 3;
+                        playSound('door');
+                    } else {
+                        spiritLocation = -1;
+                        spiritBreachTimer = 0;
+                        showWarning("PRESENCE BREACHED OFFICE!");
+                    }
+                }
+            }
+
+            renderWebGLCCTVTexture();
+        }
+
+        function handleAnomalyAI() {
+            if (activeAnomalyCam === 0 && Math.random() < 0.08) {
+                activeAnomalyCam = Math.floor(Math.random() * 3) + 1;
+                showWarning("SUBTLE CAMERA GLITCH DETECTED...");
+                renderWebGLCCTVTexture();
+            }
+        }
+
+        function gameLoop() {
+            if (!isGameActive) return;
+
+            // Determine camera shake intensity based on danger proximity
+            let shakeIntensity = 0;
+            if (spiritLocation === -1) {
+                shakeIntensity = 0.12; // Heavy shake when spirit has breached the office
+            } else if (spiritLocation === 0) {
+                shakeIntensity = 0.05; // Moderate shake when spirit is at the doorway
+            } else if (activeAnomalyCam > 0 && isCamOpen) {
+                shakeIntensity = 0.03; // Light static shake when viewing an anomalous camera
+            }
+
+            const shakeX = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
+            const shakeY = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
+
+            if (isCamOpen) {
+                const targetCamX = monitorGroup.position.x + Math.sin(monitorGroup.rotation.y) * 0.65;
+                const targetCamZ = monitorGroup.position.z + Math.cos(monitorGroup.rotation.y) * 0.65;
+                
+                camera.position.x += (targetCamX + shakeX - camera.position.x) * 0.1;
+                camera.position.y += (monitorGroup.position.y + shakeY - camera.position.y) * 0.1;
+                camera.position.z += (targetCamZ - camera.position.z) * 0.1;
+
+                camera.rotation.y += (monitorGroup.rotation.y - camera.rotation.y) * 0.1;
+                camera.rotation.x += (0 - camera.rotation.x) * 0.1;
+                targetRotationX = 0;
+                targetRotationY = 0;
+            } else if (!isJumpscareActive) {
+                camera.position.x += (shakeX - camera.position.x) * 0.1;
+                camera.position.y += (1.5 + shakeY - camera.position.y) * 0.1;
+                camera.position.z += (0 - camera.position.z) * 0.1;
+                
+                camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.08;
+                camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.08;
+            }
+
+            const targetDoorY = isDoorClosed ? 1.1 : 3.2;
+            officeDoorMesh.position.y += (targetDoorY - officeDoorMesh.position.y) * 0.12;
+
+            let powerDrainRate = 0.008;
+            if (isLightOn) powerDrainRate += 0.05;
+            if (isDoorClosed) powerDrainRate += 0.04;
+            if (isCamOpen) powerDrainRate += 0.02;
+
+            power = Math.max(0, power - powerDrainRate);
+            if (power <= 0) {
+                if (isLightOn) toggleLight();
+                if (isDoorClosed) toggleDoor();
+            }
+
+            let sanityDrainRate = 0.005;
+            if (activeAnomalyCam > 0) sanityDrainRate += 0.03;
+            if (spiritLocation === 0) sanityDrainRate += 0.06;
+            if (spiritLocation === -1) sanityDrainRate += 0.20;
+
+            sanity = Math.max(0, sanity - sanityDrainRate);
+
+            // Gradual prayer health deterioration & sanity restoration
+            if (isPraying && health > 5 && sanity < 100) {
+                health = Math.max(0, health - 0.08); // Slow health deterioration per frame
+                sanity = Math.min(100, sanity + 0.12); // Slow sanity recovery per frame
+                
+                if (health <= 0) {
+                    isPraying = false;
+                    document.getElementById('btn-pray').classList.remove('active');
+                    triggerTerrifyingJumpscare("Exhausted vital energy through prolonged prayer sacrifice.");
+                }
+            } else if (isPraying && (health <= 5 || sanity >= 100)) {
+                isPraying = false;
+                document.getElementById('btn-pray').classList.remove('active');
+            }
+
+            if (spiritLocation === -1 && !isJumpscareActive) {
+                spiritBreachTimer += 0.016;
+                if (isCrucifixUp) {
+                    spiritLocation = 3;
+                    spiritBreachTimer = 0;
+                    playSound('exorcism');
+                    showWarning("SPIRIT BANISHED BY HOLY CRUCIFIX!");
+                } else if (spiritBreachTimer > 3.0) {
+                    triggerTerrifyingJumpscare("Spirit Breached Office");
+                    return;
+                }
+            }
+
+            if (sanity <= 0 && !isJumpscareActive) {
+                triggerTerrifyingJumpscare("Sanity Completely Overwhelmed");
+                return;
+            }
+
+            document.getElementById('ui-power-val').textContent = `${Math.round(power)}%`;
+            document.getElementById('ui-power-bar').style.width = `${power}%`;
+
+            document.getElementById('ui-sanity-val').textContent = `${Math.round(sanity)}%`;
+            document.getElementById('ui-sanity-bar').style.width = `${sanity}%`;
+
+            document.getElementById('ui-health-val').textContent = `${Math.round(health)}%`;
+            document.getElementById('ui-health-bar').style.width = `${health}%`;
+
+            if (deskLamp) {
+                deskLamp.intensity = 2.2 + (Math.random() - 0.5) * (activeAnomalyCam > 0 ? 0.3 : 0.05);
+            }
+
+            renderWebGLCCTVTexture();
+            renderer.render(scene, camera);
+            draw2DSpiritOverlay();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function triggerTerrifyingJumpscare(reason) {
+            isJumpscareActive = true;
+            isGameActive = false;
+            clearInterval(timerInterval);
+            stopAmbientSound();
+            playSound('jumpscare');
+
+            if (isCamOpen) toggleCameraMonitor();
+
+            spiritLocation = -1;
+
+            const jsElem = document.getElementById('jumpscare-overlay');
+            jsElem.classList.remove('hidden');
+
+            let shakeCount = 0;
+            const jumpscareAnim = setInterval(() => {
+                shakeCount++;
+
+                camera.position.x = (Math.random() - 0.5) * 0.4;
+                camera.position.y = 1.5 + (Math.random() - 0.5) * 0.4;
+                camera.position.z = (Math.random() - 0.5) * 0.2;
+
+                if (deskLamp) deskLamp.intensity = Math.random() < 0.5 ? 0 : 8.0;
+
+                renderer.render(scene, camera);
+                draw2DSpiritOverlay();
+
+                if (shakeCount > 40) {
+                    clearInterval(jumpscareAnim);
+                    jsElem.classList.add('hidden');
+                    document.getElementById('game-ui').classList.add('hidden');
+                    
+                    if (spiritCtx) spiritCtx.clearRect(0, 0, spiritCanvas.width, spiritCanvas.height);
+
+                    const endScreen = document.getElementById('screen-end');
+                    document.getElementById('end-title').textContent = "DEFEATED";
+                    document.getElementById('end-title').className = "text-4xl md:text-5xl font-vt323 mb-2 tracking-wider text-red-600";
+                    document.getElementById('end-subtitle').textContent = `Reason: ${reason}`;
+                    
+                    const hoursPassed = Math.floor((300 - shiftTimer) / 50);
+                    const currentHour = (11 + hoursPassed) % 12 || 12;
+                    document.getElementById('end-time').textContent = `${currentHour}:00 ${hoursPassed >= 1 ? 'AM' : 'PM'}`;
+                    document.getElementById('end-anomalies').textContent = anomaliesClearedCount;
+                    document.getElementById('end-sanity').textContent = `${Math.round(sanity)}%`;
+                    document.getElementById('end-health').textContent = `${Math.round(health)}%`;
+
+                    endScreen.classList.remove('hidden');
+                }
+            }, 30);
+        }
+
+        function triggerVictory() {
+            isGameActive = false;
+            clearInterval(timerInterval);
+            stopAmbientSound();
+            playSound('pray');
+
+            document.getElementById('game-ui').classList.add('hidden');
+            if (spiritCtx) spiritCtx.clearRect(0, 0, spiritCanvas.width, spiritCanvas.height);
+
+            const endScreen = document.getElementById('screen-end');
+            document.getElementById('end-title').textContent = "SHIFT SURVIVED";
+            document.getElementById('end-title').className = "text-4xl md:text-5xl font-vt323 mb-2 tracking-wider text-amber-400";
+            document.getElementById('end-subtitle').textContent = "You survived the night shift at Malacañang Palace.";
+            
+            document.getElementById('end-time').textContent = "5:00 AM";
+            document.getElementById('end-anomalies').textContent = anomaliesClearedCount;
+            document.getElementById('end-sanity').textContent = `${Math.round(sanity)}%`;
+            document.getElementById('end-health').textContent = `${Math.round(health)}%`;
+
+            endScreen.classList.remove('hidden');
+        }
+
+        function restartGame(btn) {
+            if (btn) btn.blur();
+            camera.position.set(0, 1.5, 0);
+            if (spiritCtx) spiritCtx.clearRect(0, 0, spiritCanvas.width, spiritCanvas.height);
+            document.getElementById('screen-end').classList.add('hidden');
+            document.getElementById('screen-title').classList.remove('hidden');
+        }
+
+        window.onload = function() {
+            init3D();
+            setupEventListeners();
+        };
+    </script>
+</body>
+</html>
