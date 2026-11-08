@@ -61,7 +61,7 @@
     <!-- 3D WEBGL ENVIRONMENT CANVAS -->
     <div id="canvas-container" class="absolute inset-0 z-0"></div>
 
-    <!-- 2D OVERLAY CANVAS FOR SPIRIT & EFFECTS (Prevents WebGL Memory Freezes) -->
+    <!-- 2D OVERLAY CANVAS FOR SPIRIT & EFFECTS -->
     <canvas id="spirit-2d-canvas" class="absolute inset-0 z-5 pointer-events-none w-full h-full"></canvas>
 
     <!-- MAIN UI OVERLAY -->
@@ -133,7 +133,7 @@
         <div class="bg-zinc-950/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md pointer-events-auto flex justify-between items-center gap-4 shadow-xl">
             <div class="flex items-center gap-2 md:gap-4 flex-wrap">
                 <button id="btn-light" onclick="toggleLight(this)" class="btn-retro text-xs md:text-sm px-3 md:px-4 py-2 text-amber-300 rounded flex items-center gap-1.5">
-                    <span>💡 HALLWAY LIGHT [A]</span>
+                    <span>💡 FLASHLIGHT [A]</span>
                 </button>
                 <button id="btn-door" onclick="toggleDoor(this)" class="btn-retro text-xs md:text-sm px-3 md:px-4 py-2 text-amber-300 rounded flex items-center gap-1.5">
                     <span>🚪 DOOR TOGGLE [D]</span>
@@ -145,7 +145,7 @@
                     <span>🙏 PRAY [V]</span>
                 </button>
                 <button id="btn-exorcise" onclick="triggerExorcism(this)" class="bg-red-950/90 hover:bg-red-800 text-red-100 border border-red-600 text-xs md:text-sm px-3 md:px-4 py-2 rounded font-bold transition flex items-center gap-1.5">
-                    <span>⚡ EXORCISE ANOMALY [F]</span>
+                    <span>⚡ EXORCISE ANOMALY [F] (+25% HP)</span>
                 </button>
             </div>
 
@@ -179,15 +179,15 @@
                 Night Shift at Malacañang
             </h1>
             <p class="text-zinc-400 text-xs md:text-sm mb-6 leading-relaxed">
-                2D HTML5 Canvas Spirit Renderer Integration. Observe live CCTV camera feeds, manage power, and banish lingering spirits without WebGL context lockups.
+                Distinct Sprites, Mouse-Tracked Flashlight, Right-Side Stagnant Statue Master Mechanic, and Extended Power System.
             </p>
 
             <div class="grid grid-cols-2 gap-3 text-left bg-zinc-900/80 p-4 rounded border border-zinc-800 text-xs mb-6">
-                <div><span class="text-amber-400 font-bold">[A]</span> Light (Desk) / Prev Cam </div>
-                <div><span class="text-amber-400 font-bold">[D]</span> Door (Desk) / Next Cam </div>
+                <div><span class="text-amber-400 font-bold">[A]</span> Flashlight / Prev Cam </div>
+                <div><span class="text-amber-400 font-bold">[D]</span> Door / Next Cam </div>
                 <div><span class="text-amber-400 font-bold">[C]</span> Zoom CCTV Screen</div>
-                <div><span class="text-amber-400 font-bold">[F]</span> Exorcise Anomaly</div>
-                <div><span class="text-amber-400 font-bold">[V]</span> Hold to Pray (Drains Health, Restores Sanity)</div>
+                <div><span class="text-amber-400 font-bold">[F]</span> Exorcise Anomaly (+Health)</div>
+                <div><span class="text-amber-400 font-bold">[V]</span> Hold to Pray (Drains HP, Restores Sanity)</div>
                 <div><span class="text-amber-400 font-bold">[SPACE]</span> Hold Holy Crucifix</div>
             </div>
 
@@ -376,7 +376,11 @@
     <script>
         let scene, camera, renderer;
         let deskLamp, hallwayLight, ambientLight, officeDoorMesh;
-        let spiritImageElement;
+        
+        // DISTINCT SPRITE IMAGE VARIABLES
+        let corridorSpiritImg;
+        let statueMasterImg;
+        let cctvSpiritImg;
         
         // 2D CANVAS SYSTEM
         let spiritCanvas, spiritCtx;
@@ -405,10 +409,12 @@
         let activeAnomalyCam = 0;
         let anomaliesClearedCount = 0;
 
+        // STAGNANT STATUE MASTER VARIABLES
+        let statueMeter = 100.0; 
+
         let targetRotationY = 0, targetRotationX = 0;
         const keys = {};
 
-        // CCTV Camera Telemetry
         let cctvFrameCounter = 0;
         let staticTransitionFrames = 0;
 
@@ -447,20 +453,25 @@
             screenTexture.magFilter = THREE.LinearFilter;
 
             buildOfficeEnvironment();
-            load2DSpiritAsset();
+            load2DSpiritAssets();
 
             window.addEventListener('resize', onWindowResize);
             
             document.addEventListener('mousemove', (e) => {
-                if (!isGameActive || isCamOpen || isJumpscareActive) return;
-                const movementX = e.movementX || 0;
-                const movementY = e.movementY || 0;
+                if (!isGameActive || isJumpscareActive) return;
 
-                targetRotationY -= movementX * 0.0018;
-                targetRotationX -= movementY * 0.0018;
+                const mouseX = (e.clientX / window.innerWidth) * 2 - 1;
+                const mouseY = -(e.clientY / window.innerHeight) * 2 + 1;
 
-                targetRotationX = Math.max(-0.45, Math.min(0.45, targetRotationX));
-                targetRotationY = Math.max(-1.1, Math.min(1.1, targetRotationY));
+                if (isCamOpen) {
+                    monitorGroup.rotation.y = (Math.PI / 6) + (mouseX * 0.15);
+                } else {
+                    targetRotationY = -mouseX * 0.65;
+                    targetRotationX = mouseY * 0.35;
+
+                    targetRotationX = Math.max(-0.45, Math.min(0.45, targetRotationX));
+                    targetRotationY = Math.max(-1.1, Math.min(1.1, targetRotationY));
+                }
             });
         }
 
@@ -470,29 +481,33 @@
             spiritCanvas.height = window.innerHeight;
         }
 
-        function load2DSpiritAsset() {
-            spiritImageElement = new Image();
-            spiritImageElement.onerror = function() {
-                const fallbackCanvas = document.createElement('canvas');
-                fallbackCanvas.width = 150;
-                fallbackCanvas.height = 200;
-                const fCtx = fallbackCanvas.getContext('2d');
-                fCtx.fillStyle = "rgba(180, 220, 200, 0.85)";
-                fCtx.beginPath();
-                fCtx.arc(75, 60, 45, Math.PI, 0, false);
-                fCtx.lineTo(105, 170);
-                fCtx.lineTo(90, 150);
-                fCtx.lineTo(75, 170);
-                fCtx.lineTo(60, 150);
-                fCtx.lineTo(45, 170);
-                fCtx.closePath();
-                fCtx.fill();
-                fCtx.fillStyle = "#ff0000";
-                fCtx.fillRect(55, 50, 12, 8);
-                fCtx.fillRect(83, 50, 12, 8);
-                spiritImageElement.src = fallbackCanvas.toDataURL();
+        function load2DSpiritAssets() {
+            corridorSpiritImg = new Image();
+            corridorSpiritImg.onerror = function() {
+                const fb1 = document.createElement('canvas'); fb1.width = 150; fb1.height = 200;
+                const ctx1 = fb1.getContext('2d');
+                ctx1.fillStyle = "#34d399"; ctx1.fillRect(40, 40, 70, 120);
+                corridorSpiritImg.src = fb1.toDataURL();
             };
-            spiritImageElement.src = 'erap.png';
+            corridorSpiritImg.src = 'spirit-corridor.png';
+
+            statueMasterImg = new Image();
+            statueMasterImg.onerror = function() {
+                const fb2 = document.createElement('canvas'); fb2.width = 150; fb2.height = 200;
+                const ctx2 = fb2.getContext('2d');
+                ctx2.fillStyle = "#f87171"; ctx2.fillRect(40, 40, 70, 120);
+                statueMasterImg.src = fb2.toDataURL();
+            };
+            statueMasterImg.src = 'spirit-puppet.png';
+
+            cctvSpiritImg = new Image();
+            cctvSpiritImg.onerror = function() {
+                const fb3 = document.createElement('canvas'); fb3.width = 150; fb3.height = 200;
+                const ctx3 = fb3.getContext('2d');
+                ctx3.fillStyle = "#60a5fa"; ctx3.fillRect(40, 40, 70, 120);
+                cctvSpiritImg.src = fb3.toDataURL();
+            };
+            cctvSpiritImg.src = 'spirit-cctv.png';
         }
 
         function buildOfficeEnvironment() {
@@ -583,9 +598,8 @@
             deskLamp.castShadow = true;
             scene.add(deskLamp);
 
-            hallwayLight = new THREE.SpotLight(0xfff1e0, 0, 22, Math.PI / 4, 0.3);
-            hallwayLight.position.set(0, 2.4, -3.8);
-            hallwayLight.target.position.set(0, 0, -12);
+            hallwayLight = new THREE.SpotLight(0xfff5ea, 0, 30, Math.PI / 5, 0.25, 1.5);
+            hallwayLight.position.set(0, 1.5, 0);
             scene.add(hallwayLight);
             scene.add(hallwayLight.target);
         }
@@ -598,7 +612,7 @@
         }
 
         function draw2DSpiritOverlay() {
-            if (!spiritCtx || !spiritImageElement || !spiritImageElement.complete) return;
+            if (!spiritCtx) return;
 
             const w = spiritCanvas.width;
             const h = spiritCanvas.height;
@@ -612,27 +626,27 @@
 
             spiritCtx.imageSmoothingEnabled = false;
 
-            if (spiritLocation === 1 && isLightOn) {
+            if (spiritLocation === 1 && isLightOn && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.12;
                 const spriteH = h * 0.32;
                 const x = (w / 2) - (spriteW / 2) + offsetX;
                 const y = (h / 2) - (spriteH / 2) + offsetY - (h * 0.05);
 
                 spiritCtx.globalAlpha = 0.85;
-                spiritCtx.drawImage(spiritImageElement, x, y, spriteW, spriteH);
+                spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
                 spiritCtx.globalAlpha = 1.0;
             } 
-            else if (spiritLocation === 0 && isLightOn) {
+            else if (spiritLocation === 0 && isLightOn && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.24;
                 const spriteH = h * 0.60;
                 const x = (w / 2) - (spriteW / 2) + offsetX;
                 const y = (h / 2) - (spriteH / 2) + offsetY;
 
                 spiritCtx.globalAlpha = 0.95;
-                spiritCtx.drawImage(spiritImageElement, x, y, spriteW, spriteH);
+                spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
                 spiritCtx.globalAlpha = 1.0;
             } 
-            else if (spiritLocation === -1) {
+            else if (spiritLocation === -1 && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.42;
                 const spriteH = h * 0.95;
                 const x = (w / 2) - (spriteW / 2) + (offsetX * 0.5);
@@ -640,9 +654,40 @@
 
                 const pulse = Math.sin(Date.now() * 0.01) * 0.1;
                 spiritCtx.globalAlpha = 0.9 + pulse;
-                spiritCtx.drawImage(spiritImageElement, x, y, spriteW, spriteH);
+                spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
                 spiritCtx.globalAlpha = 1.0;
             }
+
+            // RIGHT-SIDE STATUE MASTER SPRITE
+            if (statueMasterImg && statueMasterImg.complete) {
+                const statueW = w * 0.18;
+                const statueH = h * 0.45;
+                const statueX = w * 0.72 + offsetX * 0.5;
+                const statueY = (h / 2) - (statueH / 2) + offsetY * 0.5;
+
+                const visibilityAlpha = Math.max(0.2, 1.0 - (statueMeter / 100.0));
+                spiritCtx.globalAlpha = visibilityAlpha;
+                spiritCtx.drawImage(statueMasterImg, statueX, statueY, statueW, statueH);
+            }
+
+            // STATUE ENERGY GAUGE BAR
+            const barW = 120;
+            const barH = 10;
+            const barX = w - 150;
+            const barY = h / 2 - 50;
+
+            spiritCtx.fillStyle = "rgba(0, 0, 0, 0.7)";
+            spiritCtx.fillRect(barX - 2, barY - 18, barW + 4, barH + 22);
+            spiritCtx.fillStyle = "#f87171";
+            spiritCtx.font = "12px 'VT323', monospace";
+            spiritCtx.fillText("STATUE ENERGY", barX, barY - 6);
+
+            spiritCtx.fillStyle = "#3f3f46";
+            spiritCtx.fillRect(barX, barY, barW, barH);
+            spiritCtx.fillStyle = statueMeter > 30 ? "#34d399" : "#ef4444";
+            spiritCtx.fillRect(barX, barY, barW * (statueMeter / 100.0), barH);
+
+            spiritCtx.globalAlpha = 1.0;
         }
 
         function setupEventListeners() {
@@ -708,6 +753,11 @@
             hallwayLight.intensity = isLightOn ? 6.5 : 0;
             document.getElementById('btn-light').classList.toggle('active', isLightOn);
             playSound('click');
+
+            // Flashing flashlight replenishes statue meter silently
+            if (isLightOn) {
+                statueMeter = Math.min(100.0, statueMeter + 25.0);
+            }
         }
 
         function toggleDoor(btn) {
@@ -752,10 +802,7 @@
                 anomaliesClearedCount++;
                 staticTransitionFrames = 12;
 
-                // REWARD: Restore +25% Health on successful exorcism
                 health = Math.min(100, health + 25);
-                
-                // Update Health HUD immediately
                 const healthVal = document.getElementById('ui-health-val');
                 const healthBar = document.getElementById('ui-health-bar');
                 if (healthVal) healthVal.textContent = `${Math.round(health)}%`;
@@ -842,8 +889,8 @@
 
             if (spiritLocation === activeCamIndex) {
                 screenCtx.imageSmoothingEnabled = false;
-                if (spiritImageElement && spiritImageElement.complete) {
-                    screenCtx.drawImage(spiritImageElement, 200, 105, 112, 176);
+                if (cctvSpiritImg && cctvSpiritImg.complete) {
+                    screenCtx.drawImage(cctvSpiritImg, 200, 105, 112, 176);
                 }
             }
 
@@ -938,6 +985,7 @@
             power = 100.0;
             sanity = 100.0;
             health = 100.0;
+            statueMeter = 100.0;
             isLightOn = false;
             isDoorClosed = false;
             isCamOpen = false;
@@ -1013,14 +1061,22 @@
         function gameLoop() {
             if (!isGameActive) return;
 
-            // Determine camera shake intensity based on danger proximity
+            // STATUE MASTER METER DRAIN
+            statueMeter = Math.max(0, statueMeter - 0.04);
+            if (statueMeter <= 0 && !isJumpscareActive) {
+                triggerTerrifyingJumpscare("Statue Master unleashed its wrath because the flashlight wasn't flashed!");
+                return;
+            }
+
             let shakeIntensity = 0;
             if (spiritLocation === -1) {
-                shakeIntensity = 0.12; // Heavy shake when spirit has breached the office
+                shakeIntensity = 0.12; 
             } else if (spiritLocation === 0) {
-                shakeIntensity = 0.05; // Moderate shake when spirit is at the doorway
+                shakeIntensity = 0.05; 
+            } else if (statueMeter < 25) {
+                shakeIntensity = 0.04; 
             } else if (activeAnomalyCam > 0 && isCamOpen) {
-                shakeIntensity = 0.03; // Light static shake when viewing an anomalous camera
+                shakeIntensity = 0.03; 
             }
 
             const shakeX = shakeIntensity > 0 ? (Math.random() - 0.5) * shakeIntensity : 0;
@@ -1045,15 +1101,22 @@
                 
                 camera.rotation.y += (targetRotationY - camera.rotation.y) * 0.08;
                 camera.rotation.x += (targetRotationX - camera.rotation.x) * 0.08;
+
+                if (hallwayLight) {
+                    hallwayLight.position.copy(camera.position);
+                    const forwardVector = new THREE.Vector3(0, 0, -1).applyEuler(camera.rotation);
+                    hallwayLight.target.position.copy(camera.position).add(forwardVector.multiplyScalar(20));
+                    hallwayLight.target.updateMatrixWorld();
+                }
             }
 
             const targetDoorY = isDoorClosed ? 1.1 : 3.2;
             officeDoorMesh.position.y += (targetDoorY - officeDoorMesh.position.y) * 0.12;
 
-            let powerDrainRate = 0.008;
-            if (isLightOn) powerDrainRate += 0.05;
-            if (isDoorClosed) powerDrainRate += 0.04;
-            if (isCamOpen) powerDrainRate += 0.02;
+            let powerDrainRate = 0.003;
+            if (isLightOn) powerDrainRate += 0.012;
+            if (isDoorClosed) powerDrainRate += 0.010;
+            if (isCamOpen) powerDrainRate += 0.005;
 
             power = Math.max(0, power - powerDrainRate);
             if (power <= 0) {
@@ -1061,17 +1124,16 @@
                 if (isDoorClosed) toggleDoor();
             }
 
-            let sanityDrainRate = 0.005;
+            let sanityDrainRate = 0.008;
             if (activeAnomalyCam > 0) sanityDrainRate += 0.03;
             if (spiritLocation === 0) sanityDrainRate += 0.06;
             if (spiritLocation === -1) sanityDrainRate += 0.20;
 
             sanity = Math.max(0, sanity - sanityDrainRate);
 
-            // Gradual prayer health deterioration & sanity restoration
             if (isPraying && health > 5 && sanity < 100) {
-                health = Math.max(0, health - 0.08); // Slow health deterioration per frame
-                sanity = Math.min(100, sanity + 0.12); // Slow sanity recovery per frame
+                health = Math.max(0, health - 0.08); 
+                sanity = Math.min(100, sanity + 0.12); 
                 
                 if (health <= 0) {
                     isPraying = false;
