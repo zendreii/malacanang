@@ -626,26 +626,25 @@
 
             spiritCtx.imageSmoothingEnabled = false;
 
+            // 1. CORRIDOR / DOORWAY SPIRIT (Hidden if door is closed)
             if (spiritLocation === 1 && isLightOn && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.12;
                 const spriteH = h * 0.32;
                 const x = (w / 2) - (spriteW / 2) + offsetX;
                 const y = (h / 2) - (spriteH / 2) + offsetY - (h * 0.05);
 
-                spiritCtx.globalAlpha = 0.85;
+                spiritCtx.globalAlpha = 1.0; // Solid opacity
                 spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
-                spiritCtx.globalAlpha = 1.0;
             } 
-            else if (spiritLocation === 0 && isLightOn && corridorSpiritImg && corridorSpiritImg.complete) {
+            else if (spiritLocation === 0 && isLightOn && !isDoorClosed && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.24;
                 const spriteH = h * 0.60;
                 const x = (w / 2) - (spriteW / 2) + offsetX;
                 const y = (h / 2) - (spriteH / 2) + offsetY;
 
-                spiritCtx.globalAlpha = 0.95;
+                spiritCtx.globalAlpha = 1.0; // Solid opacity
                 spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
-                spiritCtx.globalAlpha = 1.0;
-            } 
+            }
             else if (spiritLocation === -1 && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.42;
                 const spriteH = h * 0.95;
@@ -659,17 +658,16 @@
             }
 
             // RIGHT-SIDE STATUE MASTER SPRITE
+           // 2. RIGHT-SIDE STATUE MASTER (Rendered completely solid and pinned in the right corner)
             if (statueMasterImg && statueMasterImg.complete) {
-                const statueW = w * 0.18;
-                const statueH = h * 0.45;
-                const statueX = w * 0.72 + offsetX * 0.5;
-                const statueY = (h / 2) - (statueH / 2) + offsetY * 0.5;
+                const statueW = w * 0.22; // Width of the statue
+                const statueH = h * 0.55; // Height of the statue
+                const statueX = w * 0.78; // Pinned firmly to the right side of the screen
+                const statueY = (h / 2) - (statueH / 2) + (h * 0.05); // Centered vertically in the room
 
-                const visibilityAlpha = Math.max(0.2, 1.0 - (statueMeter / 100.0));
-                spiritCtx.globalAlpha = visibilityAlpha;
+                spiritCtx.globalAlpha = 1.0; // 100% Solid opacity (no transparency fading)
                 spiritCtx.drawImage(statueMasterImg, statueX, statueY, statueW, statueH);
             }
-
             // STATUE ENERGY GAUGE BAR
             const barW = 120;
             const barH = 10;
