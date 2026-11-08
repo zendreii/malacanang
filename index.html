@@ -58,6 +58,10 @@
 </head>
 <body class="bg-black text-amber-500 h-screen w-screen overflow-hidden vignette select-none">
 
+    <!-- BGM AUDIO ASSETS -->
+    <audio id="bgm-menu" src="menu-music.mp3" preload="auto" loop></audio>
+    <audio id="bgm-game" src="game-music.mp3" preload="auto" loop></audio>
+
     <!-- 3D WEBGL ENVIRONMENT CANVAS -->
     <div id="canvas-container" class="absolute inset-0 z-0"></div>
 
@@ -179,7 +183,7 @@
                 Night Shift at Malacañang
             </h1>
             <p class="text-zinc-400 text-xs md:text-sm mb-6 leading-relaxed">
-                Distinct Sprites, Mouse-Tracked Flashlight, Right-Side Stagnant Statue Master Mechanic, and Extended Power System.
+                Solid Sprites, Door Blocking, Statue Master Mechanic, Mouse-Tracked Flashlight, and Designated BGM Tracks.
             </p>
 
             <div class="grid grid-cols-2 gap-3 text-left bg-zinc-900/80 p-4 rounded border border-zinc-800 text-xs mb-6">
@@ -221,7 +225,7 @@
         <div id="jumpscare-flash" class="absolute inset-0 strobe-bg opacity-75"></div>
     </div>
 
-    <!-- AUDIO SYSTEM -->
+    <!-- AUDIO SYSTEM & BGM CONTROLLERS -->
     <script>
         let audioCtx = null;
 
@@ -232,6 +236,41 @@
             if (audioCtx.state === 'suspended') {
                 audioCtx.resume();
             }
+        }
+
+        function playMenuMusic() {
+            const menuAudio = document.getElementById('bgm-menu');
+            const gameAudio = document.getElementById('bgm-game');
+            
+            if (gameAudio) {
+                gameAudio.pause();
+                gameAudio.currentTime = 0;
+            }
+            if (menuAudio) {
+                menuAudio.volume = 0.4;
+                menuAudio.play().catch(e => console.log("Menu audio autoplay restriction:", e));
+            }
+        }
+
+        function playGameplayMusic() {
+            const menuAudio = document.getElementById('bgm-menu');
+            const gameAudio = document.getElementById('bgm-game');
+            
+            if (menuAudio) {
+                menuAudio.pause();
+                menuAudio.currentTime = 0;
+            }
+            if (gameAudio) {
+                gameAudio.volume = 0.35;
+                gameAudio.play().catch(e => console.log("Game audio autoplay restriction:", e));
+            }
+        }
+
+        function stopAllBGM() {
+            const menuAudio = document.getElementById('bgm-menu');
+            const gameAudio = document.getElementById('bgm-game');
+            if (menuAudio) { menuAudio.pause(); menuAudio.currentTime = 0; }
+            if (gameAudio) { gameAudio.pause(); gameAudio.currentTime = 0; }
         }
 
         function playSound(type) {
@@ -377,15 +416,11 @@
         let scene, camera, renderer;
         let deskLamp, hallwayLight, ambientLight, officeDoorMesh;
         
-        // DISTINCT SPRITE IMAGE VARIABLES
         let corridorSpiritImg;
         let statueMasterImg;
         let cctvSpiritImg;
         
-        // 2D CANVAS SYSTEM
         let spiritCanvas, spiritCtx;
-
-        // CCTV SYSTEM
         let screenTexture, screenCanvas, screenCtx, monitorMesh, monitorGroup;
 
         let isGameActive = false;
@@ -409,7 +444,6 @@
         let activeAnomalyCam = 0;
         let anomaliesClearedCount = 0;
 
-        // STAGNANT STATUE MASTER VARIABLES
         let statueMeter = 100.0; 
 
         let targetRotationY = 0, targetRotationX = 0;
@@ -626,14 +660,14 @@
 
             spiritCtx.imageSmoothingEnabled = false;
 
-            // 1. CORRIDOR / DOORWAY SPIRIT (Hidden if door is closed)
+            // SOLID CORRIDOR & DOORWAY SPRITES (Blocked if door is closed)
             if (spiritLocation === 1 && isLightOn && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.12;
                 const spriteH = h * 0.32;
                 const x = (w / 2) - (spriteW / 2) + offsetX;
                 const y = (h / 2) - (spriteH / 2) + offsetY - (h * 0.05);
 
-                spiritCtx.globalAlpha = 1.0; // Solid opacity
+                spiritCtx.globalAlpha = 1.0;
                 spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
             } 
             else if (spiritLocation === 0 && isLightOn && !isDoorClosed && corridorSpiritImg && corridorSpiritImg.complete) {
@@ -642,32 +676,30 @@
                 const x = (w / 2) - (spriteW / 2) + offsetX;
                 const y = (h / 2) - (spriteH / 2) + offsetY;
 
-                spiritCtx.globalAlpha = 1.0; // Solid opacity
+                spiritCtx.globalAlpha = 1.0;
                 spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
-            }
+            } 
             else if (spiritLocation === -1 && corridorSpiritImg && corridorSpiritImg.complete) {
                 const spriteW = w * 0.42;
                 const spriteH = h * 0.95;
                 const x = (w / 2) - (spriteW / 2) + (offsetX * 0.5);
                 const y = (h / 2) - (spriteH / 2) + (offsetY * 0.5) + (h * 0.05);
 
-                const pulse = Math.sin(Date.now() * 0.01) * 0.1;
-                spiritCtx.globalAlpha = 0.9 + pulse;
-                spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
                 spiritCtx.globalAlpha = 1.0;
+                spiritCtx.drawImage(corridorSpiritImg, x, y, spriteW, spriteH);
             }
 
-            // RIGHT-SIDE STATUE MASTER SPRITE
-           // 2. RIGHT-SIDE STATUE MASTER (Rendered completely solid and pinned in the right corner)
+            // SOLID RIGHT-SIDE STATUE MASTER SPRITE
             if (statueMasterImg && statueMasterImg.complete) {
-                const statueW = w * 0.22; // Width of the statue
-                const statueH = h * 0.55; // Height of the statue
-                const statueX = w * 0.78; // Pinned firmly to the right side of the screen
-                const statueY = (h / 2) - (statueH / 2) + (h * 0.05); // Centered vertically in the room
+                const statueW = w * 0.22;
+                const statueH = h * 0.55;
+                const statueX = w * 0.78;
+                const statueY = (h / 2) - (statueH / 2) + (h * 0.05);
 
-                spiritCtx.globalAlpha = 1.0; // 100% Solid opacity (no transparency fading)
+                spiritCtx.globalAlpha = 1.0;
                 spiritCtx.drawImage(statueMasterImg, statueX, statueY, statueW, statueH);
             }
+
             // STATUE ENERGY GAUGE BAR
             const barW = 120;
             const barH = 10;
@@ -752,7 +784,6 @@
             document.getElementById('btn-light').classList.toggle('active', isLightOn);
             playSound('click');
 
-            // Flashing flashlight replenishes statue meter silently
             if (isLightOn) {
                 statueMeter = Math.min(100.0, statueMeter + 25.0);
             }
@@ -977,6 +1008,7 @@
         function startGame(btn) {
             if (btn) btn.blur();
             initAudio();
+            playGameplayMusic(); // Switch to gameplay BGM
             startAmbientSound();
 
             shiftTimer = 300;
@@ -1059,7 +1091,6 @@
         function gameLoop() {
             if (!isGameActive) return;
 
-            // STATUE MASTER METER DRAIN
             statueMeter = Math.max(0, statueMeter - 0.04);
             if (statueMeter <= 0 && !isJumpscareActive) {
                 triggerTerrifyingJumpscare("Statue Master unleashed its wrath because the flashlight wasn't flashed!");
@@ -1185,6 +1216,8 @@
             isJumpscareActive = true;
             isGameActive = false;
             clearInterval(timerInterval);
+            stopAllBGM();
+            playMenuMusic(); // Revert to menu music on game over screen
             stopAmbientSound();
             playSound('jumpscare');
 
@@ -1235,6 +1268,8 @@
         function triggerVictory() {
             isGameActive = false;
             clearInterval(timerInterval);
+            stopAllBGM();
+            playMenuMusic();
             stopAmbientSound();
             playSound('pray');
 
@@ -1260,11 +1295,13 @@
             if (spiritCtx) spiritCtx.clearRect(0, 0, spiritCanvas.width, spiritCanvas.height);
             document.getElementById('screen-end').classList.add('hidden');
             document.getElementById('screen-title').classList.remove('hidden');
+            playMenuMusic();
         }
 
         window.onload = function() {
             init3D();
             setupEventListeners();
+            playMenuMusic(); // Start menu background music on page load
         };
     </script>
 </body>
